@@ -38,7 +38,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _model_Segment__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../model/Segment */ "./src/model/Segment.ts");
 /* harmony import */ var _util_RenderUtil__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../util/RenderUtil */ "./src/util/RenderUtil.ts");
 /* harmony import */ var _util_Library__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../util/Library */ "./src/util/Library.ts");
-/* harmony import */ var _angular_platform_browser__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! @angular/platform-browser */ "./node_modules/@angular/platform-browser/__ivy_ngcc__/fesm2015/platform-browser.js");
+/* harmony import */ var _util_OldStateChecker__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../util/OldStateChecker */ "./src/util/OldStateChecker.ts");
+/* harmony import */ var _angular_platform_browser__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! @angular/platform-browser */ "./node_modules/@angular/platform-browser/__ivy_ngcc__/fesm2015/platform-browser.js");
+
 
 
 
@@ -60,6 +62,7 @@ class AppComponent {
         const points = [];
         const segments = [];
         const N = 17; // how many dots to draw
+        const oldState = new _util_OldStateChecker__WEBPACK_IMPORTED_MODULE_5__["OldStateChecker"]();
         let currentHover;
         for (let i = 0; i < N; i++) {
             const phi = 2 * i * Math.PI * (1.0 / N);
@@ -72,14 +75,15 @@ class AppComponent {
         canvas.width = w;
         canvas.height = h;
         renderUtil.renderHover(undefined);
-        canvas.onmousemove = function (e) {
+        function onMouseMove(e) {
             const hover = findHover(e, findActive());
             if (hover === currentHover) {
                 return;
             }
             currentHover = hover;
             renderUtil.renderHover(currentHover);
-        };
+        }
+        canvas.onmousemove = onMouseMove;
         canvas.onmouseout = function () {
             currentHover = undefined;
             renderUtil.renderHover(currentHover);
@@ -163,24 +167,32 @@ class AppComponent {
             }
             const i = findSegment(active, hover);
             if (i !== undefined) {
+                oldState.push(segments[i]);
                 segments.splice(i, 1);
             }
             else {
-                segments.push(new _model_Segment__WEBPACK_IMPORTED_MODULE_2__["Segment"](active, hover));
-            }
-            segments.sort((s1, s2) => {
-                const h = s1.a.i - s2.a.i;
-                if (h !== 0) {
-                    return h;
+                const t = new _model_Segment__WEBPACK_IMPORTED_MODULE_2__["Segment"](active, hover);
+                if (oldState.isRepetition(t)) {
+                    t.flip();
+                    oldState.clear();
                 }
-                return s1.b.i - s2.b.i;
+                segments.push(t);
+                oldState.push(t);
+            }
+            segments.sort((s, t) => {
+                const da = s.a.i - t.a.i;
+                if (da !== 0) {
+                    return da;
+                }
+                return s.b.i - t.b.i;
             });
             active.maybeDeactivate();
             renderUtil.render(segments);
+            onMouseMove(e);
         };
     }
 }
-AppComponent.ɵfac = function AppComponent_Factory(t) { return new (t || AppComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_angular_platform_browser__WEBPACK_IMPORTED_MODULE_5__["Title"])); };
+AppComponent.ɵfac = function AppComponent_Factory(t) { return new (t || AppComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_angular_platform_browser__WEBPACK_IMPORTED_MODULE_6__["Title"])); };
 AppComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: AppComponent, selectors: [["app-root"]], decls: 5, vars: 0, consts: [[1, "container"], ["id", "controls"], ["id", "segments"], ["id", "canvas"]], template: function AppComponent_Template(rf, ctx) { if (rf & 1) {
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "div", 0);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](1, "div", 1);
@@ -198,7 +210,7 @@ AppComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineCompo
                 templateUrl: './app.component.html',
                 styleUrls: ['./app.component.css']
             }]
-    }], function () { return [{ type: _angular_platform_browser__WEBPACK_IMPORTED_MODULE_5__["Title"] }]; }, null); })();
+    }], function () { return [{ type: _angular_platform_browser__WEBPACK_IMPORTED_MODULE_6__["Title"] }]; }, null); })();
 
 
 /***/ }),
@@ -377,6 +389,22 @@ class Segment {
             this.b = b;
         }
     }
+    flip() {
+        const active = this.a.active() === 2 ? this.a : this.b;
+        if (active.active() !== 2) {
+            return;
+        }
+        const inactive = active === this.a ? this.b : this.a;
+        active.forceDeactivate();
+        inactive.incActive();
+        inactive.incActive();
+    }
+    equals(s) {
+        if (!s) {
+            return false;
+        }
+        return s.a === this.a && s.b === this.b;
+    }
 }
 
 
@@ -395,6 +423,33 @@ __webpack_require__.r(__webpack_exports__);
 class Library {
 }
 Library.R = 20; // node radius
+
+
+/***/ }),
+
+/***/ "./src/util/OldStateChecker.ts":
+/*!*************************************!*\
+  !*** ./src/util/OldStateChecker.ts ***!
+  \*************************************/
+/*! exports provided: OldStateChecker */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "OldStateChecker", function() { return OldStateChecker; });
+class OldStateChecker {
+    push(t) {
+        this.veryOld = this.old;
+        this.old = t;
+    }
+    isRepetition(t) {
+        return t.equals(this.old) && this.old.equals(this.veryOld);
+    }
+    clear() {
+        this.old = undefined;
+        this.veryOld = undefined;
+    }
+}
 
 
 /***/ }),
@@ -464,7 +519,7 @@ class RenderUtil {
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__("./src/main.ts");
+module.exports = __webpack_require__(/*! /home/vgm/workspace/blue-circle/src/main.ts */"./src/main.ts");
 
 
 /***/ })
