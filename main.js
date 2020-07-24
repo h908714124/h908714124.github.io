@@ -37,7 +37,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _model_Point__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../model/Point */ "./src/model/Point.ts");
 /* harmony import */ var _model_Segment__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../model/Segment */ "./src/model/Segment.ts");
 /* harmony import */ var _util_RenderUtil__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../util/RenderUtil */ "./src/util/RenderUtil.ts");
-/* harmony import */ var _angular_platform_browser__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @angular/platform-browser */ "./node_modules/@angular/platform-browser/__ivy_ngcc__/fesm2015/platform-browser.js");
+/* harmony import */ var _util_Library__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../util/Library */ "./src/util/Library.ts");
+/* harmony import */ var _angular_platform_browser__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! @angular/platform-browser */ "./node_modules/@angular/platform-browser/__ivy_ngcc__/fesm2015/platform-browser.js");
+
 
 
 
@@ -52,9 +54,9 @@ class AppComponent {
         const m = Math.min(window.innerWidth, window.innerHeight);
         const w = m - 4.0;
         const h = m - 4.0;
-        const r = (Math.min(w, h) - 40.0) / 2.0; // radius
-        const x0 = w / 2 - 10;
-        const y0 = h / 2 - 10;
+        const r = (Math.min(w, h) - 52.0) / 2.0; // radius
+        const x0 = w / 2;
+        const y0 = h / 2;
         const points = [];
         const segments = [];
         const N = 17; // how many dots to draw
@@ -65,7 +67,6 @@ class AppComponent {
             const y = y0 - r * Math.sin(phi);
             points.push(new _model_Point__WEBPACK_IMPORTED_MODULE_1__["Point"](i + 1, x, y));
         }
-        const D = points[0].dist(points[1].centerX, points[1].centerY);
         const canvas = document.getElementById('canvas');
         const renderUtil = new _util_RenderUtil__WEBPACK_IMPORTED_MODULE_3__["RenderUtil"](points, canvas);
         canvas.width = w;
@@ -96,7 +97,7 @@ class AppComponent {
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-            if (active === undefined || active.dist(x, y) < D / 2) {
+            if (active === undefined || active.dist(x, y) < _util_Library__WEBPACK_IMPORTED_MODULE_4__["Library"].R + 6) {
                 return findHoverByDistance(x, y);
             }
             else {
@@ -111,7 +112,7 @@ class AppComponent {
                 if (active === p) {
                     continue;
                 }
-                const d = Math.abs(angle - active.angle(p.centerX, p.centerY));
+                const d = Math.abs(angle - active.angle(p.x, p.y));
                 if (d < bestD) {
                     bestD = d;
                     bestP = p;
@@ -175,30 +176,11 @@ class AppComponent {
                 return s1.b.i - s2.b.i;
             });
             active.maybeDeactivate();
-            render();
+            renderUtil.render(segments);
         };
-        function render() {
-            const ctx = canvas.getContext("2d");
-            const s = document.getElementById("segments");
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            s.innerHTML = "";
-            for (let segment of segments) {
-                ctx.beginPath();
-                ctx.strokeStyle = '#faebd7';
-                ctx.lineWidth = 1.5;
-                ctx.moveTo(segment.a.centerX, segment.a.centerY);
-                ctx.lineTo(segment.b.centerX, segment.b.centerY);
-                ctx.stroke();
-                const div = document.createElement("tr");
-                div.innerHTML = "<td>" + segment.a.i + "</td><td>" + segment.b.i + "</td>";
-                s.appendChild(div);
-            }
-            currentHover = undefined;
-            renderUtil.renderHover(currentHover);
-        }
     }
 }
-AppComponent.ɵfac = function AppComponent_Factory(t) { return new (t || AppComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_angular_platform_browser__WEBPACK_IMPORTED_MODULE_4__["Title"])); };
+AppComponent.ɵfac = function AppComponent_Factory(t) { return new (t || AppComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_angular_platform_browser__WEBPACK_IMPORTED_MODULE_5__["Title"])); };
 AppComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: AppComponent, selectors: [["app-root"]], decls: 5, vars: 0, consts: [[1, "container"], ["id", "controls"], ["id", "segments"], ["id", "canvas"]], template: function AppComponent_Template(rf, ctx) { if (rf & 1) {
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "div", 0);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](1, "div", 1);
@@ -216,7 +198,7 @@ AppComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineCompo
                 templateUrl: './app.component.html',
                 styleUrls: ['./app.component.css']
             }]
-    }], function () { return [{ type: _angular_platform_browser__WEBPACK_IMPORTED_MODULE_4__["Title"] }]; }, null); })();
+    }], function () { return [{ type: _angular_platform_browser__WEBPACK_IMPORTED_MODULE_5__["Title"] }]; }, null); })();
 
 
 /***/ }),
@@ -342,14 +324,10 @@ var __classPrivateFieldSet = (undefined && undefined.__classPrivateFieldSet) || 
 var _active;
 class Point {
     constructor(i, x, y) {
-        this.w = 20;
-        this.h = 20;
         _active.set(this, 0);
         this.i = i;
         this.x = x;
         this.y = y;
-        this.centerX = x + this.w / 2;
-        this.centerY = y + this.h / 2;
     }
     active() {
         return __classPrivateFieldGet(this, _active);
@@ -367,10 +345,10 @@ class Point {
         __classPrivateFieldSet(this, _active, 0);
     }
     dist(x, y) {
-        return Math.sqrt((x - this.centerX) * (x - this.centerX) + (y - this.centerY) * (y - this.centerY));
+        return Math.sqrt((x - this.x) * (x - this.x) + (y - this.y) * (y - this.y));
     }
     angle(x, y) {
-        return Math.atan2(this.centerY - y, this.centerX - x);
+        return Math.atan2(this.y - y, this.x - x);
     }
 }
 _active = new WeakMap();
@@ -404,6 +382,23 @@ class Segment {
 
 /***/ }),
 
+/***/ "./src/util/Library.ts":
+/*!*****************************!*\
+  !*** ./src/util/Library.ts ***!
+  \*****************************/
+/*! exports provided: Library */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Library", function() { return Library; });
+class Library {
+}
+Library.R = 20; // node radius
+
+
+/***/ }),
+
 /***/ "./src/util/RenderUtil.ts":
 /*!********************************!*\
   !*** ./src/util/RenderUtil.ts ***!
@@ -414,6 +409,8 @@ class Segment {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RenderUtil", function() { return RenderUtil; });
+/* harmony import */ var _Library__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Library */ "./src/util/Library.ts");
+
 const color_inactive = "#000000";
 const color_active2 = "yellow";
 const color_active = "red";
@@ -424,16 +421,35 @@ class RenderUtil {
         this.points = points;
         this.canvas = canvas;
     }
+    render(segments) {
+        const ctx = this.canvas.getContext("2d");
+        const s = document.getElementById("segments");
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        s.innerHTML = "";
+        for (let segment of segments) {
+            ctx.beginPath();
+            ctx.strokeStyle = '#faebd7';
+            ctx.lineWidth = 1.5;
+            ctx.moveTo(segment.a.x, segment.a.y);
+            ctx.lineTo(segment.b.x, segment.b.y);
+            ctx.stroke();
+            const div = document.createElement("tr");
+            div.innerHTML = "<td>" + segment.a.i + "</td><td>" + segment.b.i + "</td>";
+            s.appendChild(div);
+        }
+        this.renderHover(undefined);
+    }
     renderHover(hover) {
         const ctx = this.canvas.getContext("2d");
         for (let r of this.points) {
             ctx.beginPath();
-            ctx.arc(r.centerX, r.centerY, r.w, 0, tau);
+            ctx.arc(r.x, r.y, _Library__WEBPACK_IMPORTED_MODULE_0__["Library"].R, 0, tau);
             ctx.fillStyle = r.active() === 2 ? color_active2 : r.active() === 1 ? color_active : r === hover ? color_hover : color_inactive;
             ctx.fill();
             ctx.font = "12px Arial";
             ctx.fillStyle = r.active() === 2 ? "#000000" : "#ffffff";
-            ctx.fillText("" + r.i, r.x + 4, r.y + 14);
+            let number = r.i < 10 ? 4 : 7;
+            ctx.fillText("" + r.i, r.x - number, r.y + 5);
         }
     }
 }
@@ -448,7 +464,7 @@ class RenderUtil {
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(/*! /home/vgm/workspace/blue-circle/src/main.ts */"./src/main.ts");
+module.exports = __webpack_require__("./src/main.ts");
 
 
 /***/ })
