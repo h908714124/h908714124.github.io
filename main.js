@@ -34,12 +34,14 @@ webpackEmptyAsyncContext.id = "./$$_lazy_route_resource lazy recursive";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "AppComponent", function() { return AppComponent; });
 /* harmony import */ var _angular_core__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @angular/core */ "./node_modules/@angular/core/__ivy_ngcc__/fesm2015/core.js");
-/* harmony import */ var _model_Point__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../model/Point */ "./src/model/Point.ts");
+/* harmony import */ var _model_Node__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../model/Node */ "./src/model/Node.ts");
 /* harmony import */ var _model_Segment__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../model/Segment */ "./src/model/Segment.ts");
 /* harmony import */ var _util_RenderUtil__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../util/RenderUtil */ "./src/util/RenderUtil.ts");
 /* harmony import */ var _util_Library__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../util/Library */ "./src/util/Library.ts");
 /* harmony import */ var _util_OldStateChecker__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../util/OldStateChecker */ "./src/util/OldStateChecker.ts");
-/* harmony import */ var _angular_platform_browser__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! @angular/platform-browser */ "./node_modules/@angular/platform-browser/__ivy_ngcc__/fesm2015/platform-browser.js");
+/* harmony import */ var _model_Point__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../model/Point */ "./src/model/Point.ts");
+/* harmony import */ var _angular_platform_browser__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! @angular/platform-browser */ "./node_modules/@angular/platform-browser/__ivy_ngcc__/fesm2015/platform-browser.js");
+
 
 
 
@@ -53,27 +55,24 @@ class AppComponent {
         titleService.setTitle('Blue Circle');
     }
     ngOnInit() {
-        const m = Math.min(window.innerWidth, window.innerHeight);
-        const w = m - 4.0;
-        const h = m - 4.0;
-        const r = (Math.min(w, h) - 52.0) / 2.0; // radius
-        const x0 = w / 2;
-        const y0 = h / 2;
-        const points = [];
+        const m = Math.min(window.innerWidth, window.innerHeight) - 4;
+        const r = (m - 52.0) / 2.0; // radius
+        const center = new _model_Point__WEBPACK_IMPORTED_MODULE_6__["Point"](m / 2, m / 2);
+        const nodes = [];
         const segments = [];
         const N = 17; // how many dots to draw
         const oldState = new _util_OldStateChecker__WEBPACK_IMPORTED_MODULE_5__["OldStateChecker"]();
         let currentHover;
         for (let i = 0; i < N; i++) {
             const phi = 2 * i * Math.PI * (1.0 / N);
-            const x = x0 + r * Math.cos(phi);
-            const y = y0 - r * Math.sin(phi);
-            points.push(new _model_Point__WEBPACK_IMPORTED_MODULE_1__["Point"](i + 1, x, y));
+            const x = center.x + r * Math.cos(phi);
+            const y = center.y - r * Math.sin(phi);
+            nodes.push(new _model_Node__WEBPACK_IMPORTED_MODULE_1__["Node"](i + 1, x, y));
         }
         const canvas = document.getElementById('canvas');
-        const renderUtil = new _util_RenderUtil__WEBPACK_IMPORTED_MODULE_3__["RenderUtil"](points, canvas);
-        canvas.width = w;
-        canvas.height = h;
+        const renderUtil = new _util_RenderUtil__WEBPACK_IMPORTED_MODULE_3__["RenderUtil"](nodes, canvas);
+        canvas.width = m;
+        canvas.height = m;
         renderUtil.renderHover(undefined);
         function onMouseMove(e) {
             const hover = findHover(e, findActive());
@@ -89,7 +88,7 @@ class AppComponent {
             renderUtil.renderHover(currentHover);
         };
         function findActive() {
-            for (let r of points) {
+            for (let r of nodes) {
                 if (r.active() !== 0) {
                     return r;
                 }
@@ -101,41 +100,30 @@ class AppComponent {
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-            if (active === undefined || active.dist(x, y) < _util_Library__WEBPACK_IMPORTED_MODULE_4__["Library"].R + 6) {
-                return findHoverByDistance(x, y);
+            if (active === undefined) {
+                if (center.dist(x, y) < _util_Library__WEBPACK_IMPORTED_MODULE_4__["Library"].R + 6) {
+                    return undefined;
+                }
+                return findHoverByAngle(x, y, center);
             }
-            else {
-                return findHoverByAngle(x, y, active);
+            if (active.dist(x, y) < _util_Library__WEBPACK_IMPORTED_MODULE_4__["Library"].R + 6) {
+                return active;
             }
+            return findHoverByAngle(x, y, active.p());
         }
         function findHoverByAngle(x, y, active) {
             const angle = active.angle(x, y);
             let bestP = undefined;
             let bestD = 100;
-            for (let p of points) {
-                if (active === p) {
+            for (let node of nodes) {
+                if (active === node.p()) {
                     continue;
                 }
-                const d = Math.abs(angle - active.angle(p.x, p.y));
+                const d = Math.abs(angle - active.angle(node.x(), node.y()));
                 if (d < bestD) {
                     bestD = d;
-                    bestP = p;
+                    bestP = node;
                 }
-            }
-            return bestP;
-        }
-        function findHoverByDistance(x, y) {
-            let bestP = undefined;
-            let bestD = r / 2;
-            for (let p of points) {
-                const d = p.dist(x, y);
-                if (d < bestD) {
-                    bestD = d;
-                    bestP = p;
-                }
-            }
-            if (bestD >= r / 2) {
-                return undefined;
             }
             return bestP;
         }
@@ -152,7 +140,7 @@ class AppComponent {
             const active = findActive();
             const hover = findHover(e, active);
             if (!hover) {
-                for (let point of points) {
+                for (let point of nodes) {
                     point.forceDeactivate();
                 }
                 currentHover = undefined;
@@ -192,7 +180,7 @@ class AppComponent {
         };
     }
 }
-AppComponent.ɵfac = function AppComponent_Factory(t) { return new (t || AppComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_angular_platform_browser__WEBPACK_IMPORTED_MODULE_6__["Title"])); };
+AppComponent.ɵfac = function AppComponent_Factory(t) { return new (t || AppComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_angular_platform_browser__WEBPACK_IMPORTED_MODULE_7__["Title"])); };
 AppComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: AppComponent, selectors: [["app-root"]], decls: 5, vars: 0, consts: [[1, "container"], ["id", "controls"], ["id", "segments"], ["id", "canvas"]], template: function AppComponent_Template(rf, ctx) { if (rf & 1) {
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "div", 0);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](1, "div", 1);
@@ -210,7 +198,7 @@ AppComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineCompo
                 templateUrl: './app.component.html',
                 styleUrls: ['./app.component.css']
             }]
-    }], function () { return [{ type: _angular_platform_browser__WEBPACK_IMPORTED_MODULE_6__["Title"] }]; }, null); })();
+    }], function () { return [{ type: _angular_platform_browser__WEBPACK_IMPORTED_MODULE_7__["Title"] }]; }, null); })();
 
 
 /***/ }),
@@ -310,22 +298,17 @@ _angular_platform_browser__WEBPACK_IMPORTED_MODULE_3__["platformBrowser"]().boot
 
 /***/ }),
 
-/***/ "./src/model/Point.ts":
-/*!****************************!*\
-  !*** ./src/model/Point.ts ***!
-  \****************************/
-/*! exports provided: Point */
+/***/ "./src/model/Node.ts":
+/*!***************************!*\
+  !*** ./src/model/Node.ts ***!
+  \***************************/
+/*! exports provided: Node */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Point", function() { return Point; });
-var __classPrivateFieldGet = (undefined && undefined.__classPrivateFieldGet) || function (receiver, privateMap) {
-    if (!privateMap.has(receiver)) {
-        throw new TypeError("attempted to get private field on non-instance");
-    }
-    return privateMap.get(receiver);
-};
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Node", function() { return Node; });
+/* harmony import */ var _Point__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Point */ "./src/model/Point.ts");
 var __classPrivateFieldSet = (undefined && undefined.__classPrivateFieldSet) || function (receiver, privateMap, value) {
     if (!privateMap.has(receiver)) {
         throw new TypeError("attempted to set private field on non-instance");
@@ -333,13 +316,20 @@ var __classPrivateFieldSet = (undefined && undefined.__classPrivateFieldSet) || 
     privateMap.set(receiver, value);
     return value;
 };
-var _active;
-class Point {
+var __classPrivateFieldGet = (undefined && undefined.__classPrivateFieldGet) || function (receiver, privateMap) {
+    if (!privateMap.has(receiver)) {
+        throw new TypeError("attempted to get private field on non-instance");
+    }
+    return privateMap.get(receiver);
+};
+var _p, _active;
+
+class Node {
     constructor(i, x, y) {
+        _p.set(this, void 0);
         _active.set(this, 0);
         this.i = i;
-        this.x = x;
-        this.y = y;
+        __classPrivateFieldSet(this, _p, new _Point__WEBPACK_IMPORTED_MODULE_0__["Point"](x, y));
     }
     active() {
         return __classPrivateFieldGet(this, _active);
@@ -357,13 +347,49 @@ class Point {
         __classPrivateFieldSet(this, _active, 0);
     }
     dist(x, y) {
+        return __classPrivateFieldGet(this, _p).dist(x, y);
+    }
+    angle(x, y) {
+        return __classPrivateFieldGet(this, _p).angle(x, y);
+        ;
+    }
+    x() {
+        return __classPrivateFieldGet(this, _p).x;
+    }
+    y() {
+        return __classPrivateFieldGet(this, _p).y;
+    }
+    p() {
+        return __classPrivateFieldGet(this, _p);
+    }
+}
+_p = new WeakMap(), _active = new WeakMap();
+
+
+/***/ }),
+
+/***/ "./src/model/Point.ts":
+/*!****************************!*\
+  !*** ./src/model/Point.ts ***!
+  \****************************/
+/*! exports provided: Point */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Point", function() { return Point; });
+class Point {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+    dist(x, y) {
         return Math.sqrt((x - this.x) * (x - this.x) + (y - this.y) * (y - this.y));
     }
     angle(x, y) {
         return Math.atan2(this.y - y, this.x - x);
     }
 }
-_active = new WeakMap();
 
 
 /***/ }),
@@ -485,8 +511,8 @@ class RenderUtil {
             ctx.beginPath();
             ctx.strokeStyle = '#faebd7';
             ctx.lineWidth = 1.5;
-            ctx.moveTo(segment.a.x, segment.a.y);
-            ctx.lineTo(segment.b.x, segment.b.y);
+            ctx.moveTo(segment.a.x(), segment.a.y());
+            ctx.lineTo(segment.b.x(), segment.b.y());
             ctx.stroke();
             const div = document.createElement("tr");
             div.innerHTML = "<td>" + segment.a.i + "</td><td>" + segment.b.i + "</td>";
@@ -498,13 +524,13 @@ class RenderUtil {
         const ctx = this.canvas.getContext("2d");
         for (let r of this.points) {
             ctx.beginPath();
-            ctx.arc(r.x, r.y, _Library__WEBPACK_IMPORTED_MODULE_0__["Library"].R, 0, tau);
+            ctx.arc(r.x(), r.y(), _Library__WEBPACK_IMPORTED_MODULE_0__["Library"].R, 0, tau);
             ctx.fillStyle = r.active() === 2 ? color_active2 : r.active() === 1 ? color_active : r === hover ? color_hover : color_inactive;
             ctx.fill();
             ctx.font = "12px Arial";
             ctx.fillStyle = r.active() === 2 ? "#000000" : "#ffffff";
             let number = r.i < 10 ? 4 : 7;
-            ctx.fillText("" + r.i, r.x - number, r.y + 5);
+            ctx.fillText("" + r.i, r.x() - number, r.y() + 5);
         }
     }
 }
