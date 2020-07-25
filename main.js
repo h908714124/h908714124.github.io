@@ -141,7 +141,7 @@ class AppComponent {
             const hover = findHover(e, active);
             if (!hover) {
                 for (let point of nodes) {
-                    point.forceDeactivate();
+                    point.setActive(0);
                 }
                 currentHover = undefined;
                 renderUtil.renderHover(currentHover);
@@ -164,14 +164,16 @@ class AppComponent {
             if (i !== undefined) {
                 oldState.push(segments[i]);
                 segments.splice(i, 1);
+                active.maybeDeactivate();
             }
             else {
                 const t = new _model_Segment__WEBPACK_IMPORTED_MODULE_2__["Segment"](active, hover);
                 if (oldState.isRepetition(t)) {
-                    t.flip();
+                    t.flipYellow();
                     oldState.clear();
                 }
                 else {
+                    t.simpleFlip();
                     oldState.push(t);
                 }
                 segments.push(t);
@@ -183,7 +185,6 @@ class AppComponent {
                 }
                 return s.b.i - t.b.i;
             });
-            active.maybeDeactivate();
             renderUtil.render(segments);
             currentHover = undefined;
             onMouseMove(e);
@@ -353,11 +354,8 @@ class Node {
             __classPrivateFieldSet(this, _active, 0);
         }
     }
-    fullActivate() {
-        __classPrivateFieldSet(this, _active, 2);
-    }
-    forceDeactivate() {
-        __classPrivateFieldSet(this, _active, 0);
+    setActive(active) {
+        __classPrivateFieldSet(this, _active, active);
     }
     dist(x, y) {
         return __classPrivateFieldGet(this, _p).dist(x, y);
@@ -424,16 +422,26 @@ class Segment {
             this.b = b;
         }
     }
-    flip() {
+    flipYellow() {
         const active = this.a.active() !== 0 ? this.a : this.b;
         const inactive = active === this.a ? this.b : this.a;
         if (active.active() === 2) {
-            active.forceDeactivate();
-            inactive.fullActivate();
+            active.setActive(0);
+            inactive.setActive(2);
             return;
         }
-        active.fullActivate();
-        inactive.forceDeactivate();
+        active.setActive(2);
+        inactive.setActive(0);
+    }
+    simpleFlip() {
+        const active = this.a.active() !== 0 ? this.a : this.b;
+        if (active.active() === 2) {
+            return;
+        }
+        const inactive = active === this.a ? this.b : this.a;
+        inactive.setActive(active.active());
+        active.setActive(0);
+        return;
     }
     equals(s) {
         if (!s) {
