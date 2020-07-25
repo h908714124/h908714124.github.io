@@ -109,14 +109,14 @@ class AppComponent {
             if (active.dist(x, y) < _util_Library__WEBPACK_IMPORTED_MODULE_4__["Library"].R + 6) {
                 return active;
             }
-            return findHoverByAngle(x, y, active.p());
+            return findHoverByAngle(x, y, active.point());
         }
         function findHoverByAngle(x, y, active) {
             const angle = active.angle(x, y);
             let bestP = undefined;
             let bestD = 100;
             for (let node of nodes) {
-                if (active === node.p()) {
+                if (active === node.point()) {
                     continue;
                 }
                 const d = Math.abs(angle - active.angle(node.x(), node.y()));
@@ -149,8 +149,15 @@ class AppComponent {
             }
             if (active === hover || !active) {
                 hover.incActive();
-                currentHover = hover;
-                renderUtil.renderHover(currentHover);
+                if (hover.active() !== 0) {
+                    const rect = canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    currentHover = findHoverByAngle(x, y, hover.point());
+                    renderUtil.renderHover(currentHover);
+                }
+                currentHover = undefined;
+                onMouseMove(e);
                 return;
             }
             const i = findSegment(active, hover);
@@ -164,8 +171,10 @@ class AppComponent {
                     t.flip();
                     oldState.clear();
                 }
+                else {
+                    oldState.push(t);
+                }
                 segments.push(t);
-                oldState.push(t);
             }
             segments.sort((s, t) => {
                 const da = s.a.i - t.a.i;
@@ -176,6 +185,7 @@ class AppComponent {
             });
             active.maybeDeactivate();
             renderUtil.render(segments);
+            currentHover = undefined;
             onMouseMove(e);
         };
     }
@@ -343,15 +353,14 @@ class Node {
             __classPrivateFieldSet(this, _active, 0);
         }
     }
+    fullActivate() {
+        __classPrivateFieldSet(this, _active, 2);
+    }
     forceDeactivate() {
         __classPrivateFieldSet(this, _active, 0);
     }
     dist(x, y) {
         return __classPrivateFieldGet(this, _p).dist(x, y);
-    }
-    angle(x, y) {
-        return __classPrivateFieldGet(this, _p).angle(x, y);
-        ;
     }
     x() {
         return __classPrivateFieldGet(this, _p).x;
@@ -359,7 +368,7 @@ class Node {
     y() {
         return __classPrivateFieldGet(this, _p).y;
     }
-    p() {
+    point() {
         return __classPrivateFieldGet(this, _p);
     }
 }
@@ -416,14 +425,15 @@ class Segment {
         }
     }
     flip() {
-        const active = this.a.active() === 2 ? this.a : this.b;
-        if (active.active() !== 2) {
+        const active = this.a.active() !== 0 ? this.a : this.b;
+        const inactive = active === this.a ? this.b : this.a;
+        if (active.active() === 2) {
+            active.forceDeactivate();
+            inactive.fullActivate();
             return;
         }
-        const inactive = active === this.a ? this.b : this.a;
-        active.forceDeactivate();
-        inactive.incActive();
-        inactive.incActive();
+        active.fullActivate();
+        inactive.forceDeactivate();
     }
     equals(s) {
         if (!s) {
