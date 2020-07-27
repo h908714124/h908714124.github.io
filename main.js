@@ -71,10 +71,11 @@ class AppComponent {
         const state = new _util_State__WEBPACK_IMPORTED_MODULE_7__["State"](nodes);
         const canvas = document.getElementById('canvas');
         const actionButton = document.getElementById('action-button');
-        actionButton.onclick = function () {
+        actionButton.onclick = function (e) {
             state.deleteMode = !state.deleteMode;
             actionButton.textContent = state.deleteMode ? 'Now deleting edges' : 'Now creating edges';
             actionButton.setAttribute('class', state.deleteMode ? 'deleteState' : 'createState');
+            e.preventDefault();
         };
         canvas.width = m;
         canvas.height = m;
