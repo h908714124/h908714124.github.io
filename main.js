@@ -40,7 +40,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _util_Library__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../util/Library */ "./src/util/Library.ts");
 /* harmony import */ var _util_OldStateChecker__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../util/OldStateChecker */ "./src/util/OldStateChecker.ts");
 /* harmony import */ var _model_Point__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../model/Point */ "./src/model/Point.ts");
-/* harmony import */ var _angular_platform_browser__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! @angular/platform-browser */ "./node_modules/@angular/platform-browser/__ivy_ngcc__/fesm2015/platform-browser.js");
+/* harmony import */ var _util_State__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../util/State */ "./src/util/State.ts");
+/* harmony import */ var _model_Graph__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../model/Graph */ "./src/model/Graph.ts");
+
 
 
 
@@ -51,50 +53,50 @@ __webpack_require__.r(__webpack_exports__);
 
 
 class AppComponent {
-    constructor(titleService) {
-        titleService.setTitle('Blue Circle');
-    }
     ngOnInit() {
         const m = Math.min(window.innerWidth, window.innerHeight) - 4;
         const r = (m - 52.0) / 2.0; // radius
         const center = new _model_Point__WEBPACK_IMPORTED_MODULE_6__["Point"](m / 2, m / 2);
         const nodes = [];
-        const segments = [];
         const N = 17; // how many dots to draw
+        const graph = new _model_Graph__WEBPACK_IMPORTED_MODULE_8__["Graph"](N);
         const oldState = new _util_OldStateChecker__WEBPACK_IMPORTED_MODULE_5__["OldStateChecker"]();
         let currentHover;
         for (let i = 0; i < N; i++) {
             const phi = 2 * i * Math.PI * (1.0 / N);
             const x = center.x + r * Math.cos(phi);
             const y = center.y - r * Math.sin(phi);
-            nodes.push(new _model_Node__WEBPACK_IMPORTED_MODULE_1__["Node"](i + 1, x, y));
+            nodes.push(new _model_Node__WEBPACK_IMPORTED_MODULE_1__["Node"](i, x, y));
         }
+        const state = new _util_State__WEBPACK_IMPORTED_MODULE_7__["State"](nodes);
         const canvas = document.getElementById('canvas');
-        const renderUtil = new _util_RenderUtil__WEBPACK_IMPORTED_MODULE_3__["RenderUtil"](nodes, canvas);
+        const actionButton = document.getElementById('action-button');
+        actionButton.onclick = function () {
+            state.deleteMode = !state.deleteMode;
+            actionButton.textContent = state.deleteMode ? 'Now deleting edges' : 'Now creating edges';
+            actionButton.setAttribute('class', state.deleteMode ? 'deleteState' : 'createState');
+        };
         canvas.width = m;
         canvas.height = m;
-        renderUtil.renderHover(undefined);
+        const ctx = canvas.getContext('2d');
+        for (let r of nodes) {
+            _util_Library__WEBPACK_IMPORTED_MODULE_4__["Library"].renderNode(r, 0, false, ctx);
+        }
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const renderUtil = new _util_RenderUtil__WEBPACK_IMPORTED_MODULE_3__["RenderUtil"](nodes, canvas, imageData, state, graph);
         function onMouseMove(e) {
-            const hover = findHover(e, findActive());
+            const hover = findHover(e, state.activeNode());
             if (hover === currentHover) {
                 return;
             }
             currentHover = hover;
-            renderUtil.renderHover(currentHover);
+            renderUtil.render(graph, currentHover);
         }
         canvas.onmousemove = onMouseMove;
         canvas.onmouseout = function () {
             currentHover = undefined;
-            renderUtil.renderHover(currentHover);
+            renderUtil.render(graph, currentHover);
         };
-        function findActive() {
-            for (let r of nodes) {
-                if (r.active() !== 0) {
-                    return r;
-                }
-            }
-            return undefined;
-        }
         function findHover(e, active) {
             // important: correct mouse position:
             const rect = canvas.getBoundingClientRect();
@@ -127,72 +129,58 @@ class AppComponent {
             }
             return bestP;
         }
-        function findSegment(a, b) {
-            for (let i = 0; i < segments.length; i++) {
-                let segment = segments[i];
-                if ((segment.a === a && segment.b === b) || (segment.a === b && segment.b === a)) {
-                    return i;
-                }
-            }
-            return undefined;
-        }
         canvas.onmouseup = function (e) {
-            const active = findActive();
+            const active = state.activeNode();
             const hover = findHover(e, active);
             if (!hover) {
-                for (let point of nodes) {
-                    point.setActive(0);
-                }
+                state.setActiveNode(undefined);
                 currentHover = undefined;
-                renderUtil.renderHover(currentHover);
+                renderUtil.render(graph, currentHover);
                 return;
             }
             if (active === hover || !active) {
-                hover.incActive();
-                if (hover.active() !== 0) {
+                state.incActive();
+                state.setActiveNode(hover);
+                if (state.activeLevel() !== 0) {
                     const rect = canvas.getBoundingClientRect();
                     const x = e.clientX - rect.left;
                     const y = e.clientY - rect.top;
                     currentHover = findHoverByAngle(x, y, hover.point());
-                    renderUtil.renderHover(currentHover);
+                    renderUtil.render(graph, currentHover);
                 }
                 currentHover = undefined;
                 onMouseMove(e);
                 return;
             }
-            const i = findSegment(active, hover);
-            if (i !== undefined) {
-                oldState.push(segments[i]);
-                segments.splice(i, 1);
-                active.maybeDeactivate();
+            const segmentExists = graph.hasSegment(active.i, hover.i);
+            if (state.deleteMode) {
+                if (segmentExists) {
+                    oldState.push(new _model_Segment__WEBPACK_IMPORTED_MODULE_2__["Segment"](active, hover));
+                    graph.removeSegment(active.i, hover.i);
+                    state.maybeDeactivate();
+                }
             }
             else {
-                const t = new _model_Segment__WEBPACK_IMPORTED_MODULE_2__["Segment"](active, hover);
-                if (oldState.isRepetition(t)) {
-                    t.flipYellow();
-                    oldState.clear();
+                if (!segmentExists) {
+                    const t = new _model_Segment__WEBPACK_IMPORTED_MODULE_2__["Segment"](active, hover);
+                    if (oldState.isRepetition(t)) {
+                        state.flipYellow(t);
+                        oldState.clear();
+                    }
+                    else {
+                        state.simpleFlip(t);
+                        oldState.push(t);
+                    }
+                    graph.addSegment(active.i, hover.i);
                 }
-                else {
-                    t.simpleFlip();
-                    oldState.push(t);
-                }
-                segments.push(t);
             }
-            segments.sort((s, t) => {
-                const da = s.a.i - t.a.i;
-                if (da !== 0) {
-                    return da;
-                }
-                return s.b.i - t.b.i;
-            });
-            renderUtil.render(segments);
             currentHover = undefined;
             onMouseMove(e);
         };
     }
 }
-AppComponent.ɵfac = function AppComponent_Factory(t) { return new (t || AppComponent)(_angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdirectiveInject"](_angular_platform_browser__WEBPACK_IMPORTED_MODULE_7__["Title"])); };
-AppComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: AppComponent, selectors: [["app-root"]], decls: 5, vars: 0, consts: [[1, "container"], ["id", "controls"], ["id", "segments"], ["id", "canvas"]], template: function AppComponent_Template(rf, ctx) { if (rf & 1) {
+AppComponent.ɵfac = function AppComponent_Factory(t) { return new (t || AppComponent)(); };
+AppComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineComponent"]({ type: AppComponent, selectors: [["app-root"]], decls: 8, vars: 0, consts: [[1, "container"], ["id", "controls"], ["id", "segments"], ["id", "canvas"], ["id", "buttons"], ["id", "action-button", "href", "#", 1, "createState"]], template: function AppComponent_Template(rf, ctx) { if (rf & 1) {
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](0, "div", 0);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](1, "div", 1);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelement"](2, "table", 2);
@@ -200,8 +188,13 @@ AppComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineCompo
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](3, "canvas", 3);
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](4, "Canvas not supported");
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](5, "div", 4);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementStart"](6, "a", 5);
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵtext"](7, "Now creating edges");
         _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
-    } }, styles: ["#controls[_ngcontent-%COMP%] {\n  margin: 20px 20px;\n  width: 200px;\n  float: left;\n}\n\n#controls[_ngcontent-%COMP%]   table[_ngcontent-%COMP%] {\n  color: #faebd7;\n}\n\n#canvas[_ngcontent-%COMP%] {\n  float: left;\n}\n\n.container[_ngcontent-%COMP%] {\n  height: 100%;\n  background-image: url('cloudy.jpg');\n}\n/*# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInNyYy9hcHAvYXBwLmNvbXBvbmVudC5jc3MiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUE7RUFDRSxpQkFBaUI7RUFDakIsWUFBWTtFQUNaLFdBQVc7QUFDYjs7QUFFQTtFQUNFLGNBQWM7QUFDaEI7O0FBRUE7RUFDRSxXQUFXO0FBQ2I7O0FBRUE7RUFDRSxZQUFZO0VBQ1osbUNBQWtEO0FBQ3BEIiwiZmlsZSI6InNyYy9hcHAvYXBwLmNvbXBvbmVudC5jc3MiLCJzb3VyY2VzQ29udGVudCI6WyIjY29udHJvbHMge1xuICBtYXJnaW46IDIwcHggMjBweDtcbiAgd2lkdGg6IDIwMHB4O1xuICBmbG9hdDogbGVmdDtcbn1cblxuI2NvbnRyb2xzIHRhYmxlIHtcbiAgY29sb3I6ICNmYWViZDc7XG59XG5cbiNjYW52YXMge1xuICBmbG9hdDogbGVmdDtcbn1cblxuLmNvbnRhaW5lciB7XG4gIGhlaWdodDogMTAwJTtcbiAgYmFja2dyb3VuZC1pbWFnZTogdXJsKHNyYy9hc3NldHMvaW1hZ2UvY2xvdWR5LmpwZyk7XG59XG4iXX0= */"] });
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
+        _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵelementEnd"]();
+    } }, styles: ["#controls[_ngcontent-%COMP%] {\n  margin: 20px 20px;\n  width: 200px;\n  float: left;\n}\n\n#controls[_ngcontent-%COMP%]   table[_ngcontent-%COMP%] {\n  color: #faebd7;\n}\n\n#canvas[_ngcontent-%COMP%] {\n  float: left;\n}\n\n#buttons[_ngcontent-%COMP%] {\n  float: left;\n}\n\na.deleteState[_ngcontent-%COMP%]:link {\n  color: #fa2f38;\n}\n\na.deleteState[_ngcontent-%COMP%]:visited {\n  color: #fa2f38;\n}\n\na.deleteState[_ngcontent-%COMP%]:hover {\n  color: #fc5058;\n}\n\na.deleteState[_ngcontent-%COMP%]:active {\n  color: #fa2f38;\n}\n\na.createState[_ngcontent-%COMP%]:link {\n  color: #fdfd54;\n}\n\na.createState[_ngcontent-%COMP%]:visited {\n  color: #fdfd54;\n}\n\na.createState[_ngcontent-%COMP%]:hover {\n  color: #fafaba;\n}\n\na.createState[_ngcontent-%COMP%]:active {\n  color: #fdfd54;\n}\n\n.container[_ngcontent-%COMP%] {\n  height: 100%;\n  background-image: url('cloudy.jpg');\n}\n/*# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInNyYy9hcHAvYXBwLmNvbXBvbmVudC5jc3MiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUE7RUFDRSxpQkFBaUI7RUFDakIsWUFBWTtFQUNaLFdBQVc7QUFDYjs7QUFFQTtFQUNFLGNBQWM7QUFDaEI7O0FBRUE7RUFDRSxXQUFXO0FBQ2I7O0FBRUE7RUFDRSxXQUFXO0FBQ2I7O0FBRUE7RUFDRSxjQUFjO0FBQ2hCOztBQUVBO0VBQ0UsY0FBYztBQUNoQjs7QUFFQTtFQUNFLGNBQWM7QUFDaEI7O0FBRUE7RUFDRSxjQUFjO0FBQ2hCOztBQUVBO0VBQ0UsY0FBYztBQUNoQjs7QUFFQTtFQUNFLGNBQWM7QUFDaEI7O0FBRUE7RUFDRSxjQUFjO0FBQ2hCOztBQUVBO0VBQ0UsY0FBYztBQUNoQjs7QUFFQTtFQUNFLFlBQVk7RUFDWixtQ0FBa0Q7QUFDcEQiLCJmaWxlIjoic3JjL2FwcC9hcHAuY29tcG9uZW50LmNzcyIsInNvdXJjZXNDb250ZW50IjpbIiNjb250cm9scyB7XG4gIG1hcmdpbjogMjBweCAyMHB4O1xuICB3aWR0aDogMjAwcHg7XG4gIGZsb2F0OiBsZWZ0O1xufVxuXG4jY29udHJvbHMgdGFibGUge1xuICBjb2xvcjogI2ZhZWJkNztcbn1cblxuI2NhbnZhcyB7XG4gIGZsb2F0OiBsZWZ0O1xufVxuXG4jYnV0dG9ucyB7XG4gIGZsb2F0OiBsZWZ0O1xufVxuXG5hLmRlbGV0ZVN0YXRlOmxpbmsge1xuICBjb2xvcjogI2ZhMmYzODtcbn1cblxuYS5kZWxldGVTdGF0ZTp2aXNpdGVkIHtcbiAgY29sb3I6ICNmYTJmMzg7XG59XG5cbmEuZGVsZXRlU3RhdGU6aG92ZXIge1xuICBjb2xvcjogI2ZjNTA1ODtcbn1cblxuYS5kZWxldGVTdGF0ZTphY3RpdmUge1xuICBjb2xvcjogI2ZhMmYzODtcbn1cblxuYS5jcmVhdGVTdGF0ZTpsaW5rIHtcbiAgY29sb3I6ICNmZGZkNTQ7XG59XG5cbmEuY3JlYXRlU3RhdGU6dmlzaXRlZCB7XG4gIGNvbG9yOiAjZmRmZDU0O1xufVxuXG5hLmNyZWF0ZVN0YXRlOmhvdmVyIHtcbiAgY29sb3I6ICNmYWZhYmE7XG59XG5cbmEuY3JlYXRlU3RhdGU6YWN0aXZlIHtcbiAgY29sb3I6ICNmZGZkNTQ7XG59XG5cbi5jb250YWluZXIge1xuICBoZWlnaHQ6IDEwMCU7XG4gIGJhY2tncm91bmQtaW1hZ2U6IHVybChzcmMvYXNzZXRzL2ltYWdlL2Nsb3VkeS5qcGcpO1xufVxuIl19 */"] });
 /*@__PURE__*/ (function () { _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵsetClassMetadata"](AppComponent, [{
         type: _angular_core__WEBPACK_IMPORTED_MODULE_0__["Component"],
         args: [{
@@ -209,7 +202,7 @@ AppComponent.ɵcmp = _angular_core__WEBPACK_IMPORTED_MODULE_0__["ɵɵdefineCompo
                 templateUrl: './app.component.html',
                 styleUrls: ['./app.component.css']
             }]
-    }], function () { return [{ type: _angular_platform_browser__WEBPACK_IMPORTED_MODULE_7__["Title"] }]; }, null); })();
+    }], null, null); })();
 
 
 /***/ }),
@@ -309,6 +302,69 @@ _angular_platform_browser__WEBPACK_IMPORTED_MODULE_3__["platformBrowser"]().boot
 
 /***/ }),
 
+/***/ "./src/model/Graph.ts":
+/*!****************************!*\
+  !*** ./src/model/Graph.ts ***!
+  \****************************/
+/*! exports provided: Graph */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Graph", function() { return Graph; });
+class Graph {
+    constructor(N) {
+        this.segments = [];
+        for (let i = 0; i < N; i++) {
+            let items = [];
+            for (let j = 0; j < N - 1; j++) {
+                items.push(0);
+            }
+            this.segments.push(items);
+        }
+    }
+    addSegment(i, j) {
+        this.set(i, j, 1);
+    }
+    removeSegment(i, j) {
+        this.set(i, j, 0);
+    }
+    forEach(f) {
+        for (let i = 0; i < this.segments.length; i++) {
+            const items = this.segments[i];
+            for (let j = 0; j < items.length; j++) {
+                const item = items[j];
+                if (item !== 0) {
+                    f.call(undefined, i, j);
+                }
+            }
+        }
+    }
+    hasSegment(i, j) {
+        if (i === j) {
+            return false;
+        }
+        if (i < j) {
+            return this.segments[j][i] !== 0;
+        }
+        return this.segments[i][j] !== 0;
+    }
+    set(i, j, data) {
+        if (i === j) {
+            return;
+        }
+        if (i < j) {
+            this.segments[j][i] = data;
+        }
+        else {
+            this.segments[i][j] = data;
+        }
+    }
+}
+
+
+/***/ }),
+
 /***/ "./src/model/Node.ts":
 /*!***************************!*\
   !*** ./src/model/Node.ts ***!
@@ -333,29 +389,13 @@ var __classPrivateFieldGet = (undefined && undefined.__classPrivateFieldGet) || 
     }
     return privateMap.get(receiver);
 };
-var _p, _active;
+var _p;
 
 class Node {
     constructor(i, x, y) {
         _p.set(this, void 0);
-        _active.set(this, 0);
         this.i = i;
         __classPrivateFieldSet(this, _p, new _Point__WEBPACK_IMPORTED_MODULE_0__["Point"](x, y));
-    }
-    active() {
-        return __classPrivateFieldGet(this, _active);
-    }
-    incActive() {
-        __classPrivateFieldSet(this, _active, __classPrivateFieldGet(this, _active) + 1);
-        __classPrivateFieldSet(this, _active, __classPrivateFieldGet(this, _active) % 3);
-    }
-    maybeDeactivate() {
-        if (__classPrivateFieldGet(this, _active) === 1) {
-            __classPrivateFieldSet(this, _active, 0);
-        }
-    }
-    setActive(active) {
-        __classPrivateFieldSet(this, _active, active);
     }
     dist(x, y) {
         return __classPrivateFieldGet(this, _p).dist(x, y);
@@ -370,7 +410,7 @@ class Node {
         return __classPrivateFieldGet(this, _p);
     }
 }
-_p = new WeakMap(), _active = new WeakMap();
+_p = new WeakMap();
 
 
 /***/ }),
@@ -422,27 +462,6 @@ class Segment {
             this.b = b;
         }
     }
-    flipYellow() {
-        const active = this.a.active() !== 0 ? this.a : this.b;
-        const inactive = active === this.a ? this.b : this.a;
-        if (active.active() === 2) {
-            active.setActive(0);
-            inactive.setActive(2);
-            return;
-        }
-        active.setActive(2);
-        inactive.setActive(0);
-    }
-    simpleFlip() {
-        const active = this.a.active() !== 0 ? this.a : this.b;
-        if (active.active() === 2) {
-            return;
-        }
-        const inactive = active === this.a ? this.b : this.a;
-        inactive.setActive(active.active());
-        active.setActive(0);
-        return;
-    }
     equals(s) {
         if (!s) {
             return false;
@@ -465,7 +484,22 @@ class Segment {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Library", function() { return Library; });
 class Library {
+    static renderNode(r, active, hover, ctx) {
+        ctx.beginPath();
+        ctx.arc(r.x(), r.y(), Library.R, 0, Library.tau);
+        ctx.fillStyle = active === 2 ? Library.color_active2 : active === 1 ? Library.color_active : hover ? Library.color_hover : Library.color_inactive;
+        ctx.fill();
+        ctx.font = "12px Arial";
+        ctx.fillStyle = active === 2 ? "#000000" : "#ffffff";
+        let number = r.i < 10 ? 4 : 7;
+        ctx.fillText("" + r.i, r.x() - number, r.y() + 5);
+    }
 }
+Library.tau = 2 * Math.PI;
+Library.color_inactive = "#000000";
+Library.color_active2 = "yellow";
+Library.color_active = "red";
+Library.color_hover = "blue";
 Library.R = 20; // node radius
 
 
@@ -510,45 +544,142 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RenderUtil", function() { return RenderUtil; });
 /* harmony import */ var _Library__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Library */ "./src/util/Library.ts");
 
-const color_inactive = "#000000";
-const color_active2 = "yellow";
-const color_active = "red";
-const color_hover = "blue";
-const tau = 2 * Math.PI;
 class RenderUtil {
-    constructor(points, canvas) {
-        this.points = points;
+    constructor(points, canvas, imageData, state, graph) {
+        this.nodes = points;
         this.canvas = canvas;
+        this.imageData = imageData;
+        this.state = state;
+        this.graph = graph;
     }
-    render(segments) {
-        const ctx = this.canvas.getContext("2d");
-        const s = document.getElementById("segments");
-        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    render(segments, hover) {
+        const ctx = this.canvas.getContext('2d');
+        const s = document.getElementById('segments');
+        ctx.putImageData(this.imageData, 0, 0);
         s.innerHTML = "";
-        for (let segment of segments) {
+        segments.forEach(((x, y) => {
             ctx.beginPath();
             ctx.strokeStyle = '#faebd7';
             ctx.lineWidth = 1.5;
-            ctx.moveTo(segment.a.x(), segment.a.y());
-            ctx.lineTo(segment.b.x(), segment.b.y());
+            let a = this.nodes[x];
+            let b = this.nodes[y];
+            const x0 = a.x();
+            const y0 = a.y();
+            const x1 = b.x();
+            const y1 = b.y();
+            ctx.moveTo(x0, y0);
+            ctx.lineTo(x1, y1);
             ctx.stroke();
             const div = document.createElement("tr");
-            div.innerHTML = "<td>" + segment.a.i + "</td><td>" + segment.b.i + "</td>";
+            div.innerHTML = "<td>" + a.i + "</td><td>" + b.i + "</td>";
             s.appendChild(div);
-        }
-        this.renderHover(undefined);
+        }));
+        this.renderHover(hover);
     }
     renderHover(hover) {
-        const ctx = this.canvas.getContext("2d");
-        for (let r of this.points) {
-            ctx.beginPath();
-            ctx.arc(r.x(), r.y(), _Library__WEBPACK_IMPORTED_MODULE_0__["Library"].R, 0, tau);
-            ctx.fillStyle = r.active() === 2 ? color_active2 : r.active() === 1 ? color_active : r === hover ? color_hover : color_inactive;
-            ctx.fill();
-            ctx.font = "12px Arial";
-            ctx.fillStyle = r.active() === 2 ? "#000000" : "#ffffff";
-            let number = r.i < 10 ? 4 : 7;
-            ctx.fillText("" + r.i, r.x() - number, r.y() + 5);
+        const ctx = this.canvas.getContext('2d');
+        const active = this.state.activeNode();
+        if (active !== undefined) {
+            _Library__WEBPACK_IMPORTED_MODULE_0__["Library"].renderNode(active, this.state.activeLevel(), false, ctx);
+        }
+        _Library__WEBPACK_IMPORTED_MODULE_0__["Library"].renderNode(hover, active === hover ? this.state.activeLevel() : 0, true, ctx);
+        if (active === undefined) {
+            return;
+        }
+        if (active !== hover) {
+            if (!this.state.deleteMode && !this.graph.hasSegment(active.i, hover.i) ||
+                this.state.deleteMode && this.graph.hasSegment(active.i, hover.i)) {
+                ctx.strokeStyle = this.state.deleteMode ? '#fa2f38' : "#fdfd54";
+                ctx.lineWidth = 1.5;
+                const x0 = active.x();
+                const y0 = active.y();
+                const x1 = hover.x();
+                const y1 = hover.y();
+                ctx.moveTo(x0, y0);
+                ctx.lineTo(x1, y1);
+                ctx.stroke();
+            }
+        }
+    }
+}
+
+
+/***/ }),
+
+/***/ "./src/util/State.ts":
+/*!***************************!*\
+  !*** ./src/util/State.ts ***!
+  \***************************/
+/*! exports provided: State */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "State", function() { return State; });
+class State {
+    constructor(nodes) {
+        this.deleteMode = false;
+        this._activeLevel = 0;
+        this.nodes = nodes;
+    }
+    activeLevel() {
+        return this._activeLevel;
+    }
+    setActiveNode(activeNode) {
+        if (activeNode === undefined) {
+            this._activeNode = undefined;
+            this._activeLevel = 0;
+        }
+        if (this._activeLevel === 0) {
+            this._activeNode = undefined;
+            return;
+        }
+        this._activeNode = activeNode.i;
+    }
+    activeNode() {
+        if (this._activeNode === undefined) {
+            return undefined;
+        }
+        return this.nodes[this._activeNode];
+    }
+    findLevel(node) {
+        if (this._activeNode !== node.i) {
+            return 0;
+        }
+        return this._activeLevel;
+    }
+    flipYellow(s) {
+        const active = this.findLevel(s.a) !== 0 ? s.a : s.b;
+        const inactive = active === s.a ? s.b : s.a;
+        let level = this.findLevel(active);
+        if (level === 0) {
+            return;
+        }
+        if (level === 2) {
+            this._activeNode = inactive.i;
+            return;
+        }
+        this._activeLevel = 2;
+    }
+    simpleFlip(s) {
+        const active = this.findLevel(s.a) !== 0 ? s.a : s.b;
+        if (this.findLevel(active) !== 1) {
+            return;
+        }
+        const inactive = active === s.a ? s.b : s.a;
+        this._activeNode = inactive.i;
+    }
+    incActive() {
+        this._activeLevel += 1;
+        this._activeLevel = this._activeLevel % 3;
+        if (this._activeLevel === 0) {
+            this._activeNode = undefined;
+        }
+    }
+    maybeDeactivate() {
+        if (this._activeLevel === 1) {
+            this._activeLevel = 0;
+            this._activeNode = undefined;
         }
     }
 }
@@ -563,7 +694,7 @@ class RenderUtil {
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(/*! /home/vgm/workspace/blue-circle/src/main.ts */"./src/main.ts");
+module.exports = __webpack_require__("./src/main.ts");
 
 
 /***/ })
